@@ -1,0 +1,41 @@
+I want to build a **public transport prototype app** for urban Nepal that helps commuters check real-time bus/minibus locations, estimated arrival times (ETA), and traffic conditions. The app should also allow **route-specific notifications** and **seat booking for long-distance buses**.  
+
+Requirements:
+
+1. **Front-end:**  
+   - Web or mobile-friendly interface (React.js or simple HTML/CSS/JS)  
+   - Map display showing buses/minibuses on the selected route  
+   - ETA and traffic information displayed clearly  
+   - Option to select your route and receive **route-specific notifications only**  
+   - Seat booking module for long-distance buses  
+
+2. **Back-end:**  
+   - Simple server to fetch and store **bus GPS locations, ETA, traffic updates, and seat availability** (Node.js/Express or Python Flask)  
+   - Predictive ETA calculation using **live GPS + historical traffic patterns** (mock data acceptable for prototype)  
+   - Store **user preferences** for selected routes and booked seats  
+
+3. **Database:**  
+   - Use **SQLite, PostgreSQL, MongoDB, or Replit DB** for prototype  
+   - Tables/collections for:  
+     - `buses`: ID, route, current location (lat/lon), speed, capacity  
+     - `routes`: route ID, stops, historical average travel time  
+     - `users`: user ID, selected route, contact info (optional)  
+     - `bookings`: user ID, bus ID, seat number, travel date/time  
+     - `traffic`: location, congestion level (light/medium/heavy), timestamp  
+
+4. **Optional features for prototype:**  
+   - Crowdsourced traffic input (mock data entry by users)  
+   - LED display simulation for roadside information  
+
+5. **Mock Data:**  
+   - Include at least 3 bus routes with 2–3 buses per route  
+   - Add sample commuter users for testing notifications and seat booking  
+
+6. **Output:**  
+   - Users should be able to:  
+     - View bus location and ETA on a map  
+     - Receive notifications for their selected route only  
+     - Book seats for long-distance buses  
+     - Optionally see traffic congestion updates  
+
+Build a **working prototype** with database integration so that bus locations, user selections, ETA, and bookings can be stored and retrieved dynamically, even if GPS and traffic data are simulated.

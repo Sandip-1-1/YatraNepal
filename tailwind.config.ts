@@ -81,6 +81,21 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        route: {
+          blue: "rgb(37 99 235)",
+          green: "rgb(34 197 94)",
+          orange: "rgb(249 115 22)",
+        },
+        traffic: {
+          light: "rgb(34 197 94)",
+          medium: "rgb(251 191 36)",
+          heavy: "rgb(239 68 68)",
+        },
+        eta: {
+          near: "rgb(34 197 94)",
+          medium: "rgb(251 191 36)",
+          far: "rgb(249 115 22)",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)"],

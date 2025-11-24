@@ -21,7 +21,7 @@ import {
   type Notification,
   type InsertNotification,
 } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.ts";
 import { eq, and, sql } from "drizzle-orm";
 
 export interface IStorage {

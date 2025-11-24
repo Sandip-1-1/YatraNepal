@@ -1,27 +1,36 @@
-import { db } from "./db";
+import { db } from "./db.ts";
 import { routes, stops, buses, traffic, users } from "@shared/schema";
 
 async function seed() {
   console.log("Seeding database...");
 
   // Create routes
-  const [route1] = await db.insert(routes).values({
-    name: "Ring Road Express",
-    color: "#2563eb", // Blue
-    averageTravelTime: 45,
-  }).returning();
+  const [route1] = await db
+    .insert(routes)
+    .values({
+      name: "Ring Road Express",
+      color: "#2563eb", // Blue
+      averageTravelTime: 45,
+    })
+    .returning();
 
-  const [route2] = await db.insert(routes).values({
-    name: "Patan - Bouddha",
-    color: "#22c55e", // Green
-    averageTravelTime: 35,
-  }).returning();
+  const [route2] = await db
+    .insert(routes)
+    .values({
+      name: "Patan - Bouddha",
+      color: "#22c55e", // Green
+      averageTravelTime: 35,
+    })
+    .returning();
 
-  const [route3] = await db.insert(routes).values({
-    name: "Airport - Thamel",
-    color: "#f97316", // Orange
-    averageTravelTime: 25,
-  }).returning();
+  const [route3] = await db
+    .insert(routes)
+    .values({
+      name: "Airport - Thamel",
+      color: "#f97316", // Orange
+      averageTravelTime: 25,
+    })
+    .returning();
 
   console.log("Created routes");
 
@@ -69,7 +78,7 @@ async function seed() {
     { name: "Koteshwor Junction", lat: 27.6789, lon: 85.3458 },
     { name: "New Baneshwor", lat: 27.6911, lon: 85.3378 },
     { name: "Durbarmarg", lat: 27.7072, lon: 85.3161 },
-    { name: "Thamel", lat: 27.7150, lon: 85.3114 },
+    { name: "Thamel", lat: 27.715, lon: 85.3114 },
   ];
 
   for (let i = 0; i < airportThamelStops.length; i++) {

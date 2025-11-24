@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage } from "./storage.ts";
 import { insertBookingSchema, insertNotificationSchema } from "@shared/schema";
 
 // Haversine formula to calculate distance between two lat/lon points

@@ -1,5 +1,5 @@
 import { db } from "./db.ts";
-import { routes, stops, buses, traffic, users } from "@shared/schema";
+import { routes, stops, buses, traffic, users, notifications } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
 /**
@@ -39,6 +39,15 @@ async function fetchRouteGeometry(
 
 async function seed() {
   console.log("Seeding database...");
+
+  // Clear existing data (order matters due to foreign keys)
+  console.log("Clearing existing data...");
+  await db.delete(notifications);
+  await db.delete(users);
+  await db.delete(buses);
+  await db.delete(traffic);
+  await db.delete(stops);
+  await db.delete(routes);
 
   // --------------------------
   // Routes

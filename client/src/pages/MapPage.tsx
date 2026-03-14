@@ -95,7 +95,10 @@ export default function MapPage({
 
       {/* Top Bar Controls */}
       <div className="absolute top-4 left-4 z-[1001] flex items-center gap-3 flex-wrap">
-        <LocationSearch onSelectLocation={(lat, lon) => setFlyToLocation([lat, lon])} />
+        <LocationSearch
+          onSelectLocation={(lat, lon) => setFlyToLocation([lat, lon])}
+          onSelectRoute={(routeId) => handleSelectRoute(routeId)}
+        />
         <RouteSelector
           routes={routes}
           selectedRoute={selectedRoute}

@@ -528,6 +528,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Nearby routes — find routes with stops near a given location
+  app.get("/api/nearby-routes", async (req, res) => {
+    try {
+      const lat = parseFloat(req.query.lat as string);
+      const lon = parseFloat(req.query.lon as string);
+      const radiusKm = parseFloat((req.query.radius as string) || "1.5");
+
+      if (isNaN(lat) || isNaN(lon)) {
+        return res.status(400).json({ error: "lat and lon are required" });
+      }
+
+      const allStops = await storage.getStops();
+      const allRoutes = await storage.getRoutes();
+      const allBuses = await storage.getBuses();
+
+      // Find stops within radius
+      const nearbyStops = allStops.filter((s) => {
+        const d = calculateDistance(lat, lon, parseFloat(s.latitude), parseFloat(s.longitude));
+        return d <= radiusKm;
+      });
+
+      // Get unique route IDs from nearby stops
+      const routeIds = Array.from(new Set(nearbyStops.map((s) => s.routeId)));
+
+      // Build response with route info, nearest stop, and active buses
+      const results = routeIds.map((routeId) => {
+        const route = allRoutes.find((r) => r.id === routeId);
+        if (!route) return null;
+
+        const routeNearbyStops = nearbyStops
+          .filter((s) => s.routeId === routeId)
+          .map((s) => ({
+            ...s,
+            distance: calculateDistance(lat, lon, parseFloat(s.latitude), parseFloat(s.longitude)),
+          }))
+          .sort((a, b) => a.distance - b.distance);
+
+        const activeBuses = allBuses.filter((b) => b.routeId === routeId && b.isActive);
+
+        return {
+          route,
+          nearestStop: routeNearbyStops[0],
+          distanceKm: Math.round(routeNearbyStops[0].distance * 100) / 100,
+          activeBuses: activeBuses.length,
+        };
+      }).filter(Boolean).sort((a: any, b: any) => a.distanceKm - b.distanceKm);
+
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to find nearby routes" });
+    }
+  });
+
   // Start bus movement simulation (every 3 seconds)
   setInterval(simulateBusMovement, 3000);
 

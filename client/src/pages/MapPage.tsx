@@ -4,6 +4,7 @@ import MapView from "@/components/MapView";
 import BusInfoCard from "@/components/BusInfoCard";
 import RouteSelector from "@/components/RouteSelector";
 import TrafficToggle from "@/components/TrafficToggle";
+import LocationSearch from "@/components/LocationSearch";
 import { Button } from "@/components/ui/button";
 import { Bell } from "lucide-react";
 import type { Bus, Route, Stop, Traffic } from "@shared/schema";
@@ -19,6 +20,7 @@ export default function MapPage({
   const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [showTraffic, setShowTraffic] = useState(false);
+  const [flyToLocation, setFlyToLocation] = useState<[number, number] | null>(null);
 
   // Fetch data
   const { data: routes = [] } = useQuery<Route[]>({
@@ -88,10 +90,12 @@ export default function MapPage({
         onBusClick={handleBusClick}
         showTraffic={showTraffic}
         routeGeometry={routeGeometry}
+        flyToLocation={flyToLocation}
       />
 
       {/* Top Bar Controls */}
-      <div className="absolute top-4 left-4 z-[1001] flex items-center gap-3">
+      <div className="absolute top-4 left-4 z-[1001] flex items-center gap-3 flex-wrap">
+        <LocationSearch onSelectLocation={(lat, lon) => setFlyToLocation([lat, lon])} />
         <RouteSelector
           routes={routes}
           selectedRoute={selectedRoute}

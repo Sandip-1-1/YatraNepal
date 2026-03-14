@@ -34,6 +34,7 @@ interface MapViewProps {
   onBusClick: (bus: Bus) => void;
   showTraffic: boolean;
   routeGeometry: [number, number][] | null;
+  flyToLocation: [number, number] | null;
 }
 
 // Custom bus icon with route color — cached by color+type to avoid DOM thrashing
@@ -133,6 +134,21 @@ function MapBounds({ stops, selectedRouteId }: { stops: Stop[]; selectedRouteId:
   return null;
 }
 
+// Fly to a specific location when coordinates change
+function FlyToLocation({ coords }: { coords: [number, number] | null }) {
+  const map = useMap();
+  const prevCoords = useRef<[number, number] | null>(null);
+
+  useEffect(() => {
+    if (!coords) return;
+    if (prevCoords.current && prevCoords.current[0] === coords[0] && prevCoords.current[1] === coords[1]) return;
+    prevCoords.current = coords;
+    map.flyTo(coords, 16, { duration: 1.5 });
+  }, [coords, map]);
+
+  return null;
+}
+
 export default function MapView({
   buses,
   routes,
@@ -142,6 +158,7 @@ export default function MapView({
   onBusClick,
   showTraffic,
   routeGeometry,
+  flyToLocation,
 }: MapViewProps) {
   // Default center: Kathmandu
   const [center] = useState<[number, number]>([27.7172, 85.324]);
@@ -226,6 +243,9 @@ export default function MapView({
 
       {/* Auto-fit bounds on mount and route selection change only */}
       {filteredStops.length > 0 && <MapBounds stops={filteredStops} selectedRouteId={selectedRouteId} />}
+
+      {/* Fly to searched location */}
+      <FlyToLocation coords={flyToLocation} />
 
       {/* Route lines */}
       {routeLines.map(({ route, coordinates }) => (

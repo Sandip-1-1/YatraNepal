@@ -6,6 +6,11 @@ import express, {
   Response,
   NextFunction,
 } from "express";
+import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
+import passport from "passport";
+import { pool } from "./db.ts";
+import "./auth.ts"; // passport strategies + serialization
 
 import { registerRoutes } from "./routes.ts";
 
@@ -35,6 +40,23 @@ app.use(
   }),
 );
 app.use(express.urlencoded({ extended: false }));
+
+// Session store (PostgreSQL-backed)
+const PgStore = connectPgSimple(session);
+app.use(
+  session({
+    store: new PgStore({ pool, createTableIfMissing: true }),
+    secret: process.env.SESSION_SECRET || "yatra-nepal-dev-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      secure: process.env.NODE_ENV === "production",
+    },
+  }),
+);
+app.use(passport.initialize());
+app.use(passport.session());
 
 app.use((req, res, next) => {
   const start = Date.now();

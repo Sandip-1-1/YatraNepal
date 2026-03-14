@@ -5,6 +5,7 @@ import {
   buses,
   traffic,
   notifications,
+  routeHistory,
   type User,
   type InsertUser,
   type Route,
@@ -17,15 +18,18 @@ import {
   type InsertTraffic,
   type Notification,
   type InsertNotification,
+  type RouteHistory,
 } from "@shared/schema";
 import { db } from "./db.ts";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-  getCurrentUser(): Promise<User | null>;
+  getUsersWithPreferredRoute(routeId: string): Promise<User[]>;
+  setPreferredRoute(userId: string, routeId: string | null): Promise<User>;
 
   // Routes
   getRoutes(): Promise<Route[]>;
@@ -62,6 +66,12 @@ export interface IStorage {
   createNotification(notification: InsertNotification): Promise<Notification>;
   deleteNotification(id: string): Promise<void>;
   markNotificationAsRead(id: string): Promise<void>;
+  markAllNotificationsAsRead(userId: string): Promise<void>;
+
+  // Route history
+  upsertRouteView(userId: string, routeId: string): Promise<RouteHistory>;
+  getRouteHistory(userId: string): Promise<RouteHistory[]>;
+  getFrequentRoutes(userId: string, limit?: number): Promise<RouteHistory[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -76,18 +86,30 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
-  async getCurrentUser(): Promise<User | null> {
-    // For prototype, return the first user or create a default one
-    const [user] = await db.select().from(users).limit(1);
-    if (user) return user;
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
 
-    // Create a default user
-    return await this.createUser({
-      name: "Demo User",
-      email: "demo@nepaltransit.com",
-      phone: "+977-9876543210",
-      notificationsEnabled: true,
-    });
+  async getUsersWithPreferredRoute(routeId: string): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.preferredRouteId, routeId),
+          eq(users.notificationsEnabled, true),
+        ),
+      );
+  }
+
+  async setPreferredRoute(userId: string, routeId: string | null): Promise<User> {
+    const [updated] = await db
+      .update(users)
+      .set({ preferredRouteId: routeId })
+      .where(eq(users.id, userId))
+      .returning();
+    return updated;
   }
 
   // Routes
@@ -221,6 +243,53 @@ export class DatabaseStorage implements IStorage {
       .update(notifications)
       .set({ isRead: true })
       .where(eq(notifications.id, id));
+  }
+
+  async markAllNotificationsAsRead(userId: string): Promise<void> {
+    await db
+      .update(notifications)
+      .set({ isRead: true })
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
+  }
+
+  // Route history
+  async upsertRouteView(userId: string, routeId: string): Promise<RouteHistory> {
+    const [existing] = await db
+      .select()
+      .from(routeHistory)
+      .where(and(eq(routeHistory.userId, userId), eq(routeHistory.routeId, routeId)));
+
+    if (existing) {
+      const [updated] = await db
+        .update(routeHistory)
+        .set({ viewCount: existing.viewCount + 1, lastViewedAt: new Date() })
+        .where(eq(routeHistory.id, existing.id))
+        .returning();
+      return updated;
+    }
+
+    const [created] = await db
+      .insert(routeHistory)
+      .values({ userId, routeId, viewCount: 1 })
+      .returning();
+    return created;
+  }
+
+  async getRouteHistory(userId: string): Promise<RouteHistory[]> {
+    return await db
+      .select()
+      .from(routeHistory)
+      .where(eq(routeHistory.userId, userId))
+      .orderBy(desc(routeHistory.lastViewedAt));
+  }
+
+  async getFrequentRoutes(userId: string, limit = 5): Promise<RouteHistory[]> {
+    return await db
+      .select()
+      .from(routeHistory)
+      .where(eq(routeHistory.userId, userId))
+      .orderBy(desc(routeHistory.viewCount))
+      .limit(limit);
   }
 }
 

@@ -5,7 +5,7 @@
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
-    <title>Nepal Transit - Real-time Bus Tracking</title>
+    <title>YatraNepal - Real-time Bus Tracking</title>
     <meta
       name="description"
       content="Track real-time bus locations and check ETAs for public transport in urban Nepal. Never miss your bus again." />
@@ -22,6 +22,159 @@
       rel="stylesheet" />
   </head>
   <body>
+    <!-- Loading screen (shown before React hydrates, auto-removed after) -->
+    <div id="loading-screen">
+      <style>
+        #loading-screen {
+          position: fixed; inset: 0; z-index: 99999;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+          background: #ffffff;
+          transition: opacity 0.5s ease, visibility 0.5s ease;
+          font-family: 'Inter', system-ui, sans-serif;
+          overflow: hidden;
+        }
+        #loading-screen.dark-loading {
+          background: #111113;
+        }
+
+        /* ---- Logo image ---- */
+        .ls-logo {
+          width: 320px;
+          max-width: 80vw;
+          height: auto;
+          user-select: none;
+          pointer-events: none;
+        }
+        @media (max-width: 400px) {
+          .ls-logo { width: 260px; }
+        }
+
+        /* ---- Subtitle ---- */
+        .ls-subtitle {
+          margin-top: 12px;
+          font-size: 1rem;
+          font-style: italic;
+          color: #4b5563;
+          letter-spacing: 0.02em;
+        }
+        .dark-loading .ls-subtitle { color: #9ca3af; }
+
+        /* ---- Road animation container ---- */
+        .ls-road-wrap {
+          position: relative;
+          width: 280px;
+          height: 40px;
+          margin-top: 24px;
+          overflow: hidden;
+        }
+        @media (max-width: 400px) {
+          .ls-road-wrap { width: 220px; }
+        }
+
+        /* Road surface */
+        .ls-road {
+          position: absolute;
+          bottom: 8px;
+          left: 0; right: 0;
+          height: 6px;
+          background: #374151;
+          border-radius: 3px;
+        }
+        .dark-loading .ls-road { background: #6b7280; }
+
+        /* Animated dashed center line */
+        .ls-road-dashes {
+          position: absolute;
+          bottom: 10px;
+          left: 0;
+          width: 200%;
+          height: 2px;
+          background: repeating-linear-gradient(
+            90deg,
+            #ffffff 0px, #ffffff 8px,
+            transparent 8px, transparent 16px
+          );
+          animation: dashMove 0.8s linear infinite;
+        }
+        .dark-loading .ls-road-dashes {
+          background: repeating-linear-gradient(
+            90deg,
+            #d1d5db 0px, #d1d5db 8px,
+            transparent 8px, transparent 16px
+          );
+        }
+        @keyframes dashMove {
+          from { transform: translateX(0); }
+          to { transform: translateX(-16px); }
+        }
+
+        /* Mini bus that travels across the road */
+        .ls-bus {
+          position: absolute;
+          bottom: 14px;
+          animation: busTravel 3s ease-in-out infinite;
+        }
+        @keyframes busTravel {
+          0%   { left: -36px; }
+          100% { left: calc(100% + 4px); }
+        }
+
+        /* Red trail behind bus */
+        .ls-bus::after {
+          content: '';
+          position: absolute;
+          top: 50%; right: 100%;
+          transform: translateY(-50%);
+          width: 20px; height: 3px;
+          background: linear-gradient(90deg, transparent, #C8102E);
+          border-radius: 2px;
+          opacity: 0.6;
+        }
+
+        /* ---- Hide transition ---- */
+        #loading-screen.ls-hidden {
+          opacity: 0; visibility: hidden; pointer-events: none;
+        }
+      </style>
+
+      <!-- Main logo (actual PNG) -->
+      <img class="ls-logo" src="/loading screen.png" alt="YatraNepal" />
+
+      <div class="ls-subtitle">Loading your journey...</div>
+
+      <!-- Animated road with bus traveling across -->
+      <div class="ls-road-wrap">
+        <div class="ls-road"></div>
+        <div class="ls-road-dashes"></div>
+        <div class="ls-bus">
+          <svg width="32" height="20" viewBox="0 0 32 20" fill="none">
+            <rect x="1" y="2" width="28" height="12" rx="3" fill="#C8102E"/>
+            <rect x="3" y="4" width="6" height="5" rx="1" fill="#fef2f2" opacity="0.9"/>
+            <rect x="11" y="4" width="6" height="5" rx="1" fill="#fef2f2" opacity="0.9"/>
+            <rect x="19" y="4" width="6" height="5" rx="1" fill="#fef2f2" opacity="0.9"/>
+            <rect x="26" y="5" width="3" height="3" rx="1" fill="#fbbf24"/>
+            <circle cx="8" cy="16" r="3" fill="#1f2937"/>
+            <circle cx="8" cy="16" r="1.5" fill="#6b7280"/>
+            <circle cx="22" cy="16" r="3" fill="#1f2937"/>
+            <circle cx="22" cy="16" r="1.5" fill="#6b7280"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // Detect stored theme or system preference for loading screen
+      (function() {
+        var stored = localStorage.getItem('theme');
+        var isDark = stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.getElementById('loading-screen').classList.add('dark-loading');
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import passport from "passport";
 import { storage } from "./storage.ts";
-import { insertNotificationSchema } from "@shared/schema";
+import { hashPassword, isAuthenticated, stripPassword } from "./auth.ts";
+import { insertNotificationSchema, registerUserSchema, loginSchema } from "@shared/schema";
 import type { Bus, Stop, Traffic } from "@shared/schema";
 
 // --- ETA types ---
@@ -210,14 +212,11 @@ async function checkProximityNotifications(
   lon: number,
   routeStops: Stop[],
 ) {
-  const user = await storage.getCurrentUser();
-  if (!user || user.preferredRouteId !== bus.routeId) return;
+  const usersOnRoute = await storage.getUsersWithPreferredRoute(bus.routeId);
+  if (usersOnRoute.length === 0) return;
 
   for (let i = bus.currentStopIndex + 1; i < routeStops.length; i++) {
     const stop = routeStops[i];
-    const key = `${bus.id}:${stop.id}`;
-    if (proximityNotified.has(key)) continue;
-
     const d = calculateDistance(
       lat,
       lon,
@@ -227,15 +226,19 @@ async function checkProximityNotifications(
 
     // Only fire for stops within proximity range but not yet "arrived" (>50m away)
     if (d < PROXIMITY_RADIUS_KM && d > 0.05) {
-      proximityNotified.add(key);
-      const notification = await storage.createNotification({
-        userId: user.id,
-        routeId: bus.routeId,
-        message: `${bus.busNumber} (${bus.company}) is approaching ${stop.name}`,
-        type: "arrival",
-        isRead: false,
-      });
-      broadcast("notification", notification);
+      for (const user of usersOnRoute) {
+        const key = `${bus.id}:${stop.id}:${user.id}`;
+        if (proximityNotified.has(key)) continue;
+        proximityNotified.add(key);
+        const notification = await storage.createNotification({
+          userId: user.id,
+          routeId: bus.routeId,
+          message: `${bus.busNumber} (${bus.company}) is approaching ${stop.name}`,
+          type: "arrival",
+          isRead: false,
+        });
+        broadcast("notification", notification);
+      }
     }
   }
 }
@@ -277,8 +280,8 @@ async function simulateBusMovement() {
           0,
         );
 
-        const user = await storage.getCurrentUser();
-        if (user && user.preferredRouteId === bus.routeId) {
+        const usersOnRoute = await storage.getUsersWithPreferredRoute(bus.routeId);
+        for (const user of usersOnRoute) {
           const notification = await storage.createNotification({
             userId: user.id,
             routeId: bus.routeId,
@@ -337,8 +340,8 @@ async function simulateBusMovement() {
     if (nearStop !== -1 && nearStop !== stopIndex) {
       stopIndex = nearStop;
 
-      const user = await storage.getCurrentUser();
-      if (user && user.preferredRouteId === bus.routeId) {
+      const usersOnRoute = await storage.getUsersWithPreferredRoute(bus.routeId);
+      for (const user of usersOnRoute) {
         const notification = await storage.createNotification({
           userId: user.id,
           routeId: bus.routeId,
@@ -486,15 +489,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Notifications
-  app.get("/api/notifications", async (_req, res) => {
+  // Notifications (auth-aware: returns user's notifications if logged in, else empty)
+  app.get("/api/notifications", async (req, res) => {
     try {
-      const user = await storage.getCurrentUser();
-      if (!user) {
-        return res.json([]);
-      }
-      const notifications = await storage.getNotificationsByUser(user.id);
-      res.json(notifications);
+      if (!req.isAuthenticated()) return res.json([]);
+      const notifs = await storage.getNotificationsByUser(req.user!.id);
+      res.json(notifs);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch notifications" });
     }
@@ -518,13 +518,119 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // User
-  app.get("/api/user/current", async (_req, res) => {
+  // Mark all notifications as read
+  app.post("/api/notifications/mark-all-read", isAuthenticated, async (req, res) => {
     try {
-      const user = await storage.getCurrentUser();
-      res.json(user);
+      await storage.markAllNotificationsAsRead(req.user!.id);
+      res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ error: "Failed to fetch user" });
+      res.status(500).json({ error: "Failed to mark notifications as read" });
+    }
+  });
+
+  // --- Auth endpoints ---
+  app.post("/api/register", async (req, res, next) => {
+    try {
+      const parsed = registerUserSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: parsed.error.issues[0].message });
+      }
+      const { name, username, password, userType } = parsed.data;
+
+      const existing = await storage.getUserByUsername(username);
+      if (existing) {
+        return res.status(400).json({ message: "Username already taken" });
+      }
+
+      const hashed = await hashPassword(password);
+      const user = await storage.createUser({
+        name,
+        username,
+        password: hashed,
+        userType,
+        isVerified: true,
+        notificationsEnabled: true,
+      });
+
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.status(201).json(stripPassword(user));
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Registration failed" });
+    }
+  });
+
+  app.post("/api/login", (req, res, next) => {
+    const parsed = loginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ message: parsed.error.issues[0].message });
+    }
+    passport.authenticate("local", (err: any, user: any, info: any) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ message: info?.message || "Login failed" });
+      req.login(user, (err) => {
+        if (err) return next(err);
+        res.json(stripPassword(user));
+      });
+    })(req, res, next);
+  });
+
+  app.post("/api/logout", (req, res) => {
+    req.logout((err) => {
+      if (err) return res.status(500).json({ message: "Logout failed" });
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/user", (req, res) => {
+    if (!req.isAuthenticated()) return res.status(401).json({ message: "Not authenticated" });
+    res.json(stripPassword(req.user!));
+  });
+
+  // Route history (authenticated)
+  app.post("/api/preferred-route/:routeId", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.setPreferredRoute(req.user!.id, req.params.routeId);
+      res.json(stripPassword(user));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to set preferred route" });
+    }
+  });
+
+  app.delete("/api/preferred-route", isAuthenticated, async (req, res) => {
+    try {
+      const user = await storage.setPreferredRoute(req.user!.id, null);
+      res.json(stripPassword(user));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to clear preferred route" });
+    }
+  });
+
+  app.post("/api/route-history/:routeId", isAuthenticated, async (req, res) => {
+    try {
+      const entry = await storage.upsertRouteView(req.user!.id, req.params.routeId);
+      res.json(entry);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to track route view" });
+    }
+  });
+
+  app.get("/api/route-history", isAuthenticated, async (req, res) => {
+    try {
+      const history = await storage.getRouteHistory(req.user!.id);
+      res.json(history);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch route history" });
+    }
+  });
+
+  app.get("/api/frequent-routes", isAuthenticated, async (req, res) => {
+    try {
+      const frequent = await storage.getFrequentRoutes(req.user!.id);
+      res.json(frequent);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch frequent routes" });
     }
   });
 

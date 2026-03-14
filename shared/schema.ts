@@ -7,10 +7,11 @@ import { relations } from "drizzle-orm";
 // Routes table - defines bus routes with their basic info
 export const routes = pgTable("routes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(), // e.g., "Ring Road Express"
-  color: text("color").notNull(), // hex color for route display
-  averageTravelTime: integer("average_travel_time").notNull(), // in minutes
-  geometry: text("geometry"), // JSON: [[lat, lon], ...] road polyline from OSRM
+  name: text("name").notNull(),
+  color: text("color").notNull(),
+  averageTravelTime: integer("average_travel_time").notNull(),
+  baseFare: integer("base_fare").notNull().default(30), // in NPR
+  geometry: text("geometry"),
 });
 
 // Stops table - bus stops along routes
@@ -20,7 +21,7 @@ export const stops = pgTable("stops", {
   name: text("name").notNull(),
   latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
   longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
-  sequence: integer("sequence").notNull(), // order of stop in route
+  sequence: integer("sequence").notNull(),
 });
 
 // Buses table - individual buses operating on routes
@@ -28,13 +29,13 @@ export const buses = pgTable("buses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   routeId: varchar("route_id").notNull().references(() => routes.id),
   busNumber: text("bus_number").notNull(),
-  vehicleType: text("vehicle_type").notNull().default("bus"), // "bus" | "minibus"
+  vehicleType: text("vehicle_type").notNull().default("bus"),
   company: text("company").notNull().default("Nepal Yatayat"),
   currentLatitude: decimal("current_latitude", { precision: 10, scale: 7 }).notNull(),
   currentLongitude: decimal("current_longitude", { precision: 10, scale: 7 }).notNull(),
-  speed: integer("speed").notNull().default(0), // km/h
-  currentStopIndex: integer("current_stop_index").notNull().default(0), // index in route
-  currentSegmentIndex: integer("current_segment_index").notNull().default(0), // index in geometry polyline
+  speed: integer("speed").notNull().default(0),
+  currentStopIndex: integer("current_stop_index").notNull().default(0),
+  currentSegmentIndex: integer("current_segment_index").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   lastUpdated: timestamp("last_updated").notNull().defaultNow(),
 });
@@ -44,7 +45,7 @@ export const traffic = pgTable("traffic", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
   longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
-  congestionLevel: text("congestion_level").notNull(), // "light", "medium", "heavy"
+  congestionLevel: text("congestion_level").notNull(),
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
@@ -54,19 +55,33 @@ export const users = pgTable("users", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+  userType: text("user_type").notNull().default("regular"), // "regular" | "student" | "senior"
+  isVerified: boolean("is_verified").notNull().default(false),
   preferredRouteId: varchar("preferred_route_id").references(() => routes.id),
   notificationsEnabled: boolean("notifications_enabled").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
-// Notifications table - route-specific notifications
+// Notifications table
 export const notifications = pgTable("notifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id),
   routeId: varchar("route_id").notNull().references(() => routes.id),
   message: text("message").notNull(),
-  type: text("type").notNull(), // "arrival", "delay", "general"
+  type: text("type").notNull(),
   isRead: boolean("is_read").notNull().default(false),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+// Route history - tracks which routes a user views frequently
+export const routeHistory = pgTable("route_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  routeId: varchar("route_id").notNull().references(() => routes.id),
+  viewCount: integer("view_count").notNull().default(1),
+  lastViewedAt: timestamp("last_viewed_at").notNull().defaultNow(),
 });
 
 // Relations
@@ -96,6 +111,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     references: [routes.id],
   }),
   notifications: many(notifications),
+  routeHistory: many(routeHistory),
 }));
 
 export const notificationsRelations = relations(notifications, ({ one }) => ({
@@ -109,13 +125,38 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
+export const routeHistoryRelations = relations(routeHistory, ({ one }) => ({
+  user: one(users, {
+    fields: [routeHistory.userId],
+    references: [users.id],
+  }),
+  route: one(routes, {
+    fields: [routeHistory.routeId],
+    references: [routes.id],
+  }),
+}));
+
 // Insert schemas
 export const insertRouteSchema = createInsertSchema(routes).omit({ id: true });
 export const insertStopSchema = createInsertSchema(stops).omit({ id: true });
 export const insertBusSchema = createInsertSchema(buses).omit({ id: true, lastUpdated: true });
 export const insertTrafficSchema = createInsertSchema(traffic).omit({ id: true, timestamp: true });
-export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
 export const insertNotificationSchema = createInsertSchema(notifications).omit({ id: true, createdAt: true });
+export const insertRouteHistorySchema = createInsertSchema(routeHistory).omit({ id: true, lastViewedAt: true });
+
+// Auth validation schemas
+export const registerUserSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  userType: z.enum(["regular", "student", "senior"]).default("regular"),
+});
+
+export const loginSchema = z.object({
+  username: z.string().min(1),
+  password: z.string().min(1),
+});
 
 // Types
 export type Route = typeof routes.$inferSelect;
@@ -130,3 +171,6 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type RouteHistory = typeof routeHistory.$inferSelect;
+export type InsertRouteHistory = z.infer<typeof insertRouteHistorySchema>;
+export type SafeUser = Omit<User, "password">;

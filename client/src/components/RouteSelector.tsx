@@ -6,19 +6,21 @@ import {
 } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Search, X, Star } from "lucide-react";
 import type { Route } from "@shared/schema";
 
 interface RouteSelectorProps {
   routes: Route[];
   selectedRoute: Route | null;
   onSelectRoute: (routeId: string | null) => void;
+  frequentRouteIds?: string[];
 }
 
 export default function RouteSelector({
   routes,
   selectedRoute,
   onSelectRoute,
+  frequentRouteIds = [],
 }: RouteSelectorProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -29,11 +31,44 @@ export default function RouteSelector({
     return routes.filter((r) => r.name.toLowerCase().includes(q));
   }, [routes, search]);
 
+  const frequentRoutes = useMemo(() => {
+    if (!frequentRouteIds.length || search.trim()) return [];
+    return frequentRouteIds
+      .map((id) => routes.find((r) => r.id === id))
+      .filter(Boolean) as Route[];
+  }, [routes, frequentRouteIds, search]);
+
+  const otherRoutes = useMemo(() => {
+    if (!frequentRouteIds.length || search.trim()) return filteredRoutes;
+    const freqSet = new Set(frequentRouteIds);
+    return filteredRoutes.filter((r) => !freqSet.has(r.id));
+  }, [filteredRoutes, frequentRouteIds, search]);
+
   const handleSelect = (routeId: string | null) => {
     onSelectRoute(routeId);
     setOpen(false);
     setSearch("");
   };
+
+  const renderRouteButton = (route: Route, showStar = false) => (
+    <button
+      key={route.id}
+      className={`w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-2 ${
+        selectedRoute?.id === route.id ? "bg-accent font-medium" : ""
+      }`}
+      onClick={() => handleSelect(route.id)}
+      data-testid={`option-route-${route.id}`}>
+      <span
+        className="w-3 h-3 rounded-full shrink-0"
+        style={{ backgroundColor: route.color }}
+      />
+      <span className="truncate flex-1">{route.name}</span>
+      {showStar && <Star className="w-3 h-3 shrink-0 text-amber-500 fill-amber-500" />}
+      {route.baseFare > 0 && (
+        <span className="text-[10px] text-muted-foreground shrink-0">Rs.{route.baseFare}</span>
+      )}
+    </button>
+  );
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -87,21 +122,21 @@ export default function RouteSelector({
             data-testid="option-all-routes">
             All Routes
           </button>
-          {filteredRoutes.map((route) => (
-            <button
-              key={route.id}
-              className={`w-full text-left px-3 py-2 text-sm rounded-md hover:bg-accent transition-colors flex items-center gap-2 ${
-                selectedRoute?.id === route.id ? "bg-accent font-medium" : ""
-              }`}
-              onClick={() => handleSelect(route.id)}
-              data-testid={`option-route-${route.id}`}>
-              <span
-                className="w-3 h-3 rounded-full shrink-0"
-                style={{ backgroundColor: route.color }}
-              />
-              <span className="truncate">{route.name}</span>
-            </button>
-          ))}
+
+          {frequentRoutes.length > 0 && (
+            <>
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                Frequent
+              </div>
+              {frequentRoutes.map((route) => renderRouteButton(route, true))}
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                All Routes
+              </div>
+            </>
+          )}
+
+          {otherRoutes.map((route) => renderRouteButton(route))}
           {filteredRoutes.length === 0 && (
             <div className="px-3 py-6 text-sm text-muted-foreground text-center">
               No routes found

@@ -3,8 +3,8 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Bell, X, Info, AlertCircle, CheckCircle } from "lucide-react";
-import type { Notification, Route } from "@shared/schema";
+import { Bell, X, Info, AlertCircle, CheckCircle, LogIn } from "lucide-react";
+import type { Notification, Route, SafeUser } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 
 interface NotificationPanelProps {
@@ -13,6 +13,8 @@ interface NotificationPanelProps {
   onDismiss: (notificationId: string) => void;
   onToggleNotifications: (routeId: string, enabled: boolean) => void;
   notificationSettings: Record<string, boolean>;
+  user: SafeUser | null;
+  onOpenAuth?: () => void;
 }
 
 export default function NotificationPanel({
@@ -21,6 +23,8 @@ export default function NotificationPanel({
   onDismiss,
   onToggleNotifications,
   notificationSettings,
+  user,
+  onOpenAuth,
 }: NotificationPanelProps) {
   const getNotificationIcon = (type: string) => {
     switch (type) {
@@ -32,6 +36,28 @@ export default function NotificationPanel({
         return <Info className="w-5 h-5 text-blue-500 shrink-0" />;
     }
   };
+
+  if (!user) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-16 px-6 text-center">
+        <Bell className="w-12 h-12 text-muted-foreground/50 mb-3" />
+        <p className="text-sm font-medium mb-1">Log in to receive notifications</p>
+        <p className="text-xs text-muted-foreground mb-4">
+          Get real-time alerts when buses approach your preferred stops
+        </p>
+        {onOpenAuth && (
+          <Button
+            size="sm"
+            className="gap-1.5 bg-[#B91C1C] hover:bg-[#991B1B] text-white"
+            onClick={onOpenAuth}
+          >
+            <LogIn className="h-4 w-4" />
+            Log in
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full">

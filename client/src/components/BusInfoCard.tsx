@@ -1,9 +1,11 @@
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, MapPin, Clock, Navigation, Bus as BusIcon, Building2 } from "lucide-react";
+import { X, MapPin, Clock, Navigation, Bus as BusIcon, Building2, Banknote } from "lucide-react";
 import type { Bus, Route, Stop } from "@shared/schema";
 import type { StopEta } from "@/hooks/use-websocket";
+import { useAuth } from "@/hooks/use-auth";
+import { calculateFare, formatFare } from "@/lib/fare";
 
 interface BusInfoCardProps {
   bus: Bus;
@@ -20,6 +22,7 @@ export default function BusInfoCard({
   busEtas,
   onClose,
 }: BusInfoCardProps) {
+  const { user } = useAuth();
   const routeStops = stops
     .filter((s) => s.routeId === route.id)
     .sort((a, b) => a.sequence - b.sequence);
@@ -118,6 +121,48 @@ export default function BusInfoCard({
             </div>
           </div>
         </div>
+
+        {/* Fare */}
+        {route.baseFare && (
+          <div className="flex items-start gap-3">
+            <Banknote className="w-5 h-5 text-muted-foreground mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-medium">Fare</div>
+              {(() => {
+                const fare = calculateFare(
+                  route.baseFare,
+                  bus.vehicleType,
+                  user?.userType ?? "regular",
+                );
+                return (
+                  <div className="mt-0.5">
+                    <span className="text-lg font-semibold text-[#B91C1C] dark:text-red-400">
+                      {formatFare(fare.finalFare)}
+                    </span>
+                    {fare.discountPercent > 0 && (
+                      <>
+                        <span className="text-sm text-muted-foreground line-through ml-2">
+                          {formatFare(fare.vehicleFare)}
+                        </span>
+                        <Badge
+                          variant="secondary"
+                          className="ml-2 text-[10px] h-5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        >
+                          {fare.discountPercent}% off
+                        </Badge>
+                      </>
+                    )}
+                    {bus.vehicleType === "minibus" && (
+                      <div className="text-xs text-muted-foreground mt-0.5">
+                        Minibus fare (70% of bus)
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        )}
 
         {/* Live Badge */}
         <div className="flex items-center gap-2">

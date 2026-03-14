@@ -1,5 +1,6 @@
 import { db } from "./db.ts";
-import { routes, stops, buses, traffic, users, notifications } from "@shared/schema";
+import { routes, stops, buses, traffic, users, notifications, routeHistory } from "@shared/schema";
+import { hashPassword } from "./auth.ts";
 import { eq } from "drizzle-orm";
 
 /**
@@ -43,6 +44,7 @@ async function seed() {
   // Clear existing data (order matters due to foreign keys)
   console.log("Clearing existing data...");
   await db.delete(notifications);
+  await db.delete(routeHistory);
   await db.delete(users);
   await db.delete(buses);
   await db.delete(traffic);
@@ -58,6 +60,7 @@ async function seed() {
       name: "Ring Road Express",
       color: "#2563eb",
       averageTravelTime: 45,
+      baseFare: 30,
     })
     .returning();
 
@@ -67,6 +70,7 @@ async function seed() {
       name: "Patan - Bouddha",
       color: "#22c55e",
       averageTravelTime: 35,
+      baseFare: 25,
     })
     .returning();
 
@@ -76,6 +80,7 @@ async function seed() {
       name: "Airport - Thamel",
       color: "#f97316",
       averageTravelTime: 25,
+      baseFare: 35,
     })
     .returning();
 
@@ -234,17 +239,49 @@ async function seed() {
   console.log("Created traffic conditions");
 
   // --------------------------
-  // Demo user
+  // Demo users (3 types)
   // --------------------------
-  await db.insert(users).values({
-    name: "Demo User",
-    email: "demo@nepaltransit.com",
-    phone: "+977-9876543210",
-    preferredRouteId: route1.id,
-    notificationsEnabled: true,
-  });
+  const demoPassword = await hashPassword("demo123");
+  const studentPassword = await hashPassword("student123");
+  const seniorPassword = await hashPassword("senior123");
 
-  console.log("Created demo user");
+  await db.insert(users).values([
+    {
+      name: "Demo User",
+      email: "demo@nepaltransit.com",
+      phone: "+977-9876543210",
+      username: "demo",
+      password: demoPassword,
+      userType: "regular",
+      isVerified: true,
+      preferredRouteId: route1.id,
+      notificationsEnabled: true,
+    },
+    {
+      name: "Aarav Sharma",
+      email: "aarav@student.edu.np",
+      phone: "+977-9812345678",
+      username: "aarav",
+      password: studentPassword,
+      userType: "student",
+      isVerified: true,
+      preferredRouteId: route2.id,
+      notificationsEnabled: true,
+    },
+    {
+      name: "Ram Prasad Thapa",
+      email: "ramprasad@gmail.com",
+      phone: "+977-9801234567",
+      username: "ramprasad",
+      password: seniorPassword,
+      userType: "senior",
+      isVerified: true,
+      preferredRouteId: route3.id,
+      notificationsEnabled: true,
+    },
+  ]);
+
+  console.log("Created demo users (demo/demo123, aarav/student123, ramprasad/senior123)");
   console.log("Seeding complete!");
 }
 

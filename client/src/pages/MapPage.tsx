@@ -1,22 +1,17 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import MapView from "@/components/MapView";
 import BusInfoCard from "@/components/BusInfoCard";
 import RouteSelector from "@/components/RouteSelector";
 import TrafficToggle from "@/components/TrafficToggle";
 import LocationSearch from "@/components/LocationSearch";
-import { Button } from "@/components/ui/button";
-import { Bell } from "lucide-react";
-import type { Bus, Route, Stop, Traffic } from "@shared/schema";
+import { useAuth } from "@/hooks/use-auth";
+import { apiRequest } from "@/lib/queryClient";
+import type { Bus, Route, Stop, Traffic, RouteHistory } from "@shared/schema";
 import type { BusEtaResult } from "@/hooks/use-websocket";
 
-export default function MapPage({
-  onOpenNotifications,
-  unreadCount,
-}: {
-  onOpenNotifications: () => void;
-  unreadCount: number;
-}) {
+export default function MapPage() {
+  const { user } = useAuth();
   const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [showTraffic, setShowTraffic] = useState(false);
@@ -29,7 +24,6 @@ export default function MapPage({
 
   const { data: buses = [] } = useQuery<Bus[]>({
     queryKey: ["/api/buses"],
-    // Initial fetch only — live updates come via WebSocket (use-websocket.ts)
   });
 
   const { data: stops = [] } = useQuery<Stop[]>({
@@ -43,8 +37,33 @@ export default function MapPage({
   // ETAs pushed via WebSocket into this cache key
   const { data: allEtas = [] } = useQuery<BusEtaResult[]>({
     queryKey: ["/api/etas"],
-    // No queryFn — populated exclusively via WebSocket setQueryData
     enabled: false,
+  });
+
+  // Frequent routes for logged-in users
+  const { data: frequentRoutes = [] } = useQuery<RouteHistory[]>({
+    queryKey: ["/api/frequent-routes"],
+    enabled: !!user,
+  });
+
+  const frequentRouteIds = frequentRoutes.map((rh) => rh.routeId);
+
+  // Track route views
+  const trackRouteViewMutation = useMutation({
+    mutationFn: async (routeId: string) => {
+      await apiRequest("POST", `/api/route-history/${routeId}`);
+    },
+  });
+
+  // Set preferred route for notifications
+  const setPreferredRouteMutation = useMutation({
+    mutationFn: async (routeId: string | null) => {
+      if (routeId) {
+        await apiRequest("POST", `/api/preferred-route/${routeId}`);
+      } else {
+        await apiRequest("DELETE", "/api/preferred-route");
+      }
+    },
   });
 
   // Route geometry (road polyline from OSRM, cached in DB)
@@ -72,6 +91,12 @@ export default function MapPage({
     const route = routes.find((r) => r.id === routeId) || null;
     setSelectedRoute(route);
     setSelectedBus(null);
+    if (user && routeId) {
+      trackRouteViewMutation.mutate(routeId);
+      setPreferredRouteMutation.mutate(routeId);
+    } else if (user && !routeId) {
+      setPreferredRouteMutation.mutate(null);
+    }
   };
 
   const selectedBusRoute = selectedBus
@@ -79,7 +104,7 @@ export default function MapPage({
     : null;
 
   return (
-    <div className="relative h-screen w-full">
+    <div className="relative h-screen w-full pt-14 pb-14 sm:pb-0">
       {/* Map */}
       <MapView
         buses={buses}
@@ -93,8 +118,8 @@ export default function MapPage({
         flyToLocation={flyToLocation}
       />
 
-      {/* Top Bar Controls */}
-      <div className="absolute top-4 left-4 z-[1001] flex items-center gap-3 flex-wrap">
+      {/* Top Bar Controls — below header */}
+      <div className="absolute top-[calc(3.5rem+0.75rem)] left-3 z-[1001] flex items-center gap-2 flex-wrap max-w-[calc(100%-1.5rem)]">
         <LocationSearch
           onSelectLocation={(lat, lon) => setFlyToLocation([lat, lon])}
           onSelectRoute={(routeId) => handleSelectRoute(routeId)}
@@ -103,28 +128,12 @@ export default function MapPage({
           routes={routes}
           selectedRoute={selectedRoute}
           onSelectRoute={handleSelectRoute}
+          frequentRouteIds={frequentRouteIds}
         />
         <TrafficToggle
           showTraffic={showTraffic}
           onToggle={() => setShowTraffic(!showTraffic)}
         />
-      </div>
-
-      {/* Notification Button — top right */}
-      <div className="absolute top-4 right-4 z-[1001]">
-        <Button
-          size="icon"
-          variant="outline"
-          onClick={onOpenNotifications}
-          className="relative bg-background"
-          data-testid="button-open-notifications">
-          <Bell className="w-5 h-5" />
-          {unreadCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center font-medium">
-              {unreadCount}
-            </span>
-          )}
-        </Button>
       </div>
 
       {/* Bus Info Card */}

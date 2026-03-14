@@ -3,7 +3,6 @@ import {
   routes,
   stops,
   buses,
-  bookings,
   traffic,
   notifications,
   type User,
@@ -14,15 +13,13 @@ import {
   type InsertStop,
   type Bus,
   type InsertBus,
-  type Booking,
-  type InsertBooking,
   type Traffic,
   type InsertTraffic,
   type Notification,
   type InsertNotification,
 } from "@shared/schema";
 import { db } from "./db.ts";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // Users
@@ -33,6 +30,7 @@ export interface IStorage {
   // Routes
   getRoutes(): Promise<Route[]>;
   getRoute(id: string): Promise<Route | undefined>;
+  getRouteGeometry(routeId: string): Promise<[number, number][] | null>;
   createRoute(route: InsertRoute): Promise<Route>;
 
   // Stops
@@ -45,13 +43,14 @@ export interface IStorage {
   getBus(id: string): Promise<Bus | undefined>;
   getBusesByRoute(routeId: string): Promise<Bus[]>;
   createBus(bus: InsertBus): Promise<Bus>;
-  updateBusLocation(id: string, latitude: string, longitude: string, speed: number, currentStopIndex: number): Promise<Bus>;
-
-  // Bookings
-  getBookings(): Promise<Booking[]>;
-  getBookingsByUser(userId: string): Promise<Booking[]>;
-  createBooking(booking: InsertBooking): Promise<Booking>;
-  getBookingsByBus(busId: string): Promise<Booking[]>;
+  updateBusLocation(
+    id: string,
+    latitude: string,
+    longitude: string,
+    speed: number,
+    currentStopIndex: number,
+    currentSegmentIndex: number,
+  ): Promise<Bus>;
 
   // Traffic
   getTraffic(): Promise<Traffic[]>;
@@ -101,6 +100,19 @@ export class DatabaseStorage implements IStorage {
     return route || undefined;
   }
 
+  async getRouteGeometry(routeId: string): Promise<[number, number][] | null> {
+    const [route] = await db
+      .select({ geometry: routes.geometry })
+      .from(routes)
+      .where(eq(routes.id, routeId));
+    if (!route?.geometry) return null;
+    try {
+      return JSON.parse(route.geometry) as [number, number][];
+    } catch {
+      return null;
+    }
+  }
+
   async createRoute(route: InsertRoute): Promise<Route> {
     const [newRoute] = await db.insert(routes).values(route).returning();
     return newRoute;
@@ -147,7 +159,8 @@ export class DatabaseStorage implements IStorage {
     latitude: string,
     longitude: string,
     speed: number,
-    currentStopIndex: number
+    currentStopIndex: number,
+    currentSegmentIndex: number,
   ): Promise<Bus> {
     const [updatedBus] = await db
       .update(buses)
@@ -156,39 +169,12 @@ export class DatabaseStorage implements IStorage {
         currentLongitude: longitude,
         speed,
         currentStopIndex,
+        currentSegmentIndex,
         lastUpdated: new Date(),
       })
       .where(eq(buses.id, id))
       .returning();
     return updatedBus;
-  }
-
-  // Bookings
-  async getBookings(): Promise<Booking[]> {
-    return await db.select().from(bookings);
-  }
-
-  async getBookingsByUser(userId: string): Promise<Booking[]> {
-    return await db.select().from(bookings).where(eq(bookings.userId, userId));
-  }
-
-  async createBooking(booking: InsertBooking): Promise<Booking> {
-    const [newBooking] = await db.insert(bookings).values(booking).returning();
-
-    // Update bus occupied seats
-    const bus = await this.getBus(booking.busId);
-    if (bus) {
-      await db
-        .update(buses)
-        .set({ occupiedSeats: bus.occupiedSeats + 1 })
-        .where(eq(buses.id, booking.busId));
-    }
-
-    return newBooking;
-  }
-
-  async getBookingsByBus(busId: string): Promise<Booking[]> {
-    return await db.select().from(bookings).where(eq(bookings.busId, busId));
   }
 
   // Traffic
@@ -197,7 +183,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTraffic(trafficData: InsertTraffic): Promise<Traffic> {
-    const [newTraffic] = await db.insert(traffic).values(trafficData).returning();
+    const [newTraffic] = await db
+      .insert(traffic)
+      .values(trafficData)
+      .returning();
     return newTraffic;
   }
 
@@ -213,7 +202,9 @@ export class DatabaseStorage implements IStorage {
       .where(eq(notifications.userId, userId));
   }
 
-  async createNotification(notification: InsertNotification): Promise<Notification> {
+  async createNotification(
+    notification: InsertNotification,
+  ): Promise<Notification> {
     const [newNotification] = await db
       .insert(notifications)
       .values(notification)

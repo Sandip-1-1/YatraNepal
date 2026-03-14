@@ -32,7 +32,7 @@ app.use(
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
-  })
+  }),
 );
 app.use(express.urlencoded({ extended: false }));
 
@@ -67,7 +67,7 @@ app.use((req, res, next) => {
 });
 
 export default async function runApp(
-  setup: (app: Express, server: Server) => Promise<void>
+  setup: (app: Express, server: Server) => Promise<void>,
 ) {
   const server = await registerRoutes(app);
 
@@ -76,7 +76,7 @@ export default async function runApp(
     const message = err.message || "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    console.error(err);
   });
 
   // importantly run the final setup after setting up all the other routes so

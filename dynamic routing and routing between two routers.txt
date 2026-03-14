@@ -1,0 +1,94 @@
+en 
+conf t
+hostname kathmandu
+int fa0/0 
+ip add 210.210.210.1 255.255.255.0
+no sh
+
+int se2/0
+ip add 205.210.210.2 255.255.255.0
+no sh
+
+int se3/0 
+ip add 195.190.1.1 255.255.255.0
+no sh
+
+do write
+
+en 
+conf t
+router rip 
+version 2
+no auto-summary
+network 210.210.210.0
+network 195.190.1.0
+network 205.210.210.0
+do write 
+do sh ip route
+
+
+
+---------------------------------------------
+en 
+conf t
+hostname Pokhara
+int fa0/0 
+ip add 192.168.1.1 255.255.255.0
+no sh
+
+int se2/0
+ip add 195.190.1.2 255.255.255.0
+no sh
+
+do write 
+
+
+en 
+conf t
+router rip 
+version 2
+no auto-summary
+network 192.168.1.0
+network 195.190.1.0
+do write 
+do sh ip route
+
+
+--------------------------------------------
+
+en 
+conf t
+hostname Chitwan
+int fa0/0 
+ip add 200.200.200.1 255.255.255.0
+no sh
+
+int se2/0
+ip add 205.210.210.1 255.255.255.0
+no sh
+
+do write 
+
+
+Chitwan(config)#router rip 
+Chitwan(config-router)#version 2
+Chitwan(config-router)#no auto-summary
+Chitwan(config-router)#network 205.210.210.0
+Chitwan(config-router)#network 200.200.200.0
+Chitwan(config-router)#do write
+Chitwan(config-router)#do sh ip route 
+
+
+
+
+
+ multicasts to 224.0.0.9 every 30 seconds during RIP dynamic routing
+ Dynamic routing RIP protocol allows upto 15 routers 
+
+
+Dynamic routing process :
+	#router rip
+	#version 2
+	#no auto-summary  		---so that vlsm and subnet does not need to be added.
+	#network 192.168.10.0  		---write the ip address that is directly connected to the router i.e ip assigned in se2/0 and	#network 192.168.1.0		--- fa0/0
+

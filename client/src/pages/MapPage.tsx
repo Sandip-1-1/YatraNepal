@@ -1,15 +1,13 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import MapView from '@/components/MapView';
-import BusInfoCard from '@/components/BusInfoCard';
-import RouteSelector from '@/components/RouteSelector';
-import SeatBookingDialog from '@/components/SeatBookingDialog';
-import TrafficToggle from '@/components/TrafficToggle';
-import { Button } from '@/components/ui/button';
-import { Bell } from 'lucide-react';
-import type { Bus, Route, Stop, Traffic, User } from '@shared/schema';
-import { apiRequest, queryClient } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import MapView from "@/components/MapView";
+import BusInfoCard from "@/components/BusInfoCard";
+import RouteSelector from "@/components/RouteSelector";
+import TrafficToggle from "@/components/TrafficToggle";
+import { Button } from "@/components/ui/button";
+import { Bell } from "lucide-react";
+import type { Bus, Route, Stop, Traffic } from "@shared/schema";
+import type { BusEtaResult } from "@/hooks/use-websocket";
 
 export default function MapPage({
   onOpenNotifications,
@@ -18,94 +16,64 @@ export default function MapPage({
   onOpenNotifications: () => void;
   unreadCount: number;
 }) {
-  const { toast } = useToast();
   const [selectedBus, setSelectedBus] = useState<Bus | null>(null);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [showTraffic, setShowTraffic] = useState(false);
-  const [bookingDialogOpen, setBookingDialogOpen] = useState(false);
 
   // Fetch data
   const { data: routes = [] } = useQuery<Route[]>({
-    queryKey: ['/api/routes'],
+    queryKey: ["/api/routes"],
   });
 
   const { data: buses = [] } = useQuery<Bus[]>({
-    queryKey: ['/api/buses'],
-    refetchInterval: 5000, // Refresh every 5 seconds for real-time tracking
+    queryKey: ["/api/buses"],
+    // Initial fetch only — live updates come via WebSocket (use-websocket.ts)
   });
 
   const { data: stops = [] } = useQuery<Stop[]>({
-    queryKey: ['/api/stops'],
+    queryKey: ["/api/stops"],
   });
 
   const { data: traffic = [] } = useQuery<Traffic[]>({
-    queryKey: ['/api/traffic'],
+    queryKey: ["/api/traffic"],
   });
 
-  const { data: user = null } = useQuery<User | null>({
-    queryKey: ['/api/user/current'],
+  // ETAs pushed via WebSocket into this cache key
+  const { data: allEtas = [] } = useQuery<BusEtaResult[]>({
+    queryKey: ["/api/etas"],
+    // No queryFn — populated exclusively via WebSocket setQueryData
+    enabled: false,
   });
 
-  // Create booking mutation
-  const createBookingMutation = useMutation({
-    mutationFn: async (bookingData: any) => {
-      return await apiRequest('POST', '/api/bookings', {
-        ...bookingData,
-        userId: user?.id,
-        busId: selectedBus?.id,
-      });
+  // Route geometry (road polyline from OSRM, cached in DB)
+  const { data: routeGeometry = null } = useQuery<[number, number][] | null>({
+    queryKey: ["/api/routes", selectedRoute?.id, "geometry"],
+    queryFn: async () => {
+      if (!selectedRoute) return null;
+      const res = await fetch(`/api/routes/${selectedRoute.id}/geometry`);
+      if (!res.ok) return null;
+      return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/bookings'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/buses'] });
-      // Invalidate all bus booking queries to ensure fresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/bookings/bus'] });
-      toast({
-        title: 'Booking Confirmed!',
-        description: 'Your seat has been successfully booked.',
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: 'Booking Failed',
-        description: error.message || 'Unable to book seat. Please try again.',
-        variant: 'destructive',
-      });
-    },
+    enabled: !!selectedRoute,
+    staleTime: Infinity,
   });
 
   const handleBusClick = (bus: Bus) => {
     setSelectedBus(bus);
-    const route = routes.find(r => r.id === bus.routeId);
+    const route = routes.find((r) => r.id === bus.routeId);
     if (route) {
       setSelectedRoute(route);
     }
   };
 
   const handleSelectRoute = (routeId: string | null) => {
-    const route = routes.find(r => r.id === routeId) || null;
+    const route = routes.find((r) => r.id === routeId) || null;
     setSelectedRoute(route);
     setSelectedBus(null);
   };
 
-  const handleBookSeat = () => {
-    setBookingDialogOpen(true);
-  };
-
-  const handleConfirmBooking = (bookingData: any) => {
-    if (!user || !selectedBus) {
-      toast({
-        title: 'Error',
-        description: 'Unable to process booking. Please try again.',
-        variant: 'destructive',
-      });
-      return;
-    }
-    createBookingMutation.mutate(bookingData);
-  };
-
   const selectedBusRoute = selectedBus
-    ? routes.find(r => r.id === selectedBus.routeId)
+    ? routes.find((r) => r.id === selectedBus.routeId)
     : null;
 
   return (
@@ -119,32 +87,37 @@ export default function MapPage({
         selectedRoute={selectedRoute}
         onBusClick={handleBusClick}
         showTraffic={showTraffic}
+        routeGeometry={routeGeometry}
       />
 
       {/* Top Bar Controls */}
-      <div className="absolute top-6 left-6 right-6 z-[1000] flex items-center gap-3 flex-wrap">
+      <div className="absolute top-4 left-4 z-[1001] flex items-center gap-3">
         <RouteSelector
           routes={routes}
           selectedRoute={selectedRoute}
           onSelectRoute={handleSelectRoute}
         />
-        <TrafficToggle showTraffic={showTraffic} onToggle={() => setShowTraffic(!showTraffic)} />
-        <div className="ml-auto">
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={onOpenNotifications}
-            className="relative bg-background"
-            data-testid="button-open-notifications"
-          >
-            <Bell className="w-5 h-5" />
-            {unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center font-medium">
-                {unreadCount}
-              </span>
-            )}
-          </Button>
-        </div>
+        <TrafficToggle
+          showTraffic={showTraffic}
+          onToggle={() => setShowTraffic(!showTraffic)}
+        />
+      </div>
+
+      {/* Notification Button — top right */}
+      <div className="absolute top-4 right-4 z-[1001]">
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={onOpenNotifications}
+          className="relative bg-background"
+          data-testid="button-open-notifications">
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground rounded-full text-xs flex items-center justify-center font-medium">
+              {unreadCount}
+            </span>
+          )}
+        </Button>
       </div>
 
       {/* Bus Info Card */}
@@ -153,21 +126,8 @@ export default function MapPage({
           bus={selectedBus}
           route={selectedBusRoute}
           stops={stops}
+          busEtas={allEtas.find((e) => e.busId === selectedBus.id)?.etas ?? []}
           onClose={() => setSelectedBus(null)}
-          onBookSeat={handleBookSeat}
-        />
-      )}
-
-      {/* Booking Dialog */}
-      {selectedBus && selectedBusRoute && (
-        <SeatBookingDialog
-          open={bookingDialogOpen}
-          onOpenChange={setBookingDialogOpen}
-          bus={selectedBus}
-          route={selectedBusRoute}
-          stops={stops}
-          user={user}
-          onConfirmBooking={handleConfirmBooking}
         />
       )}
     </div>

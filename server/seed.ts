@@ -42,14 +42,16 @@ async function seed() {
   console.log("Seeding database...");
 
   // Clear existing data (order matters due to foreign keys)
+  // Use try/catch per table in case some tables don't exist yet
   console.log("Clearing existing data...");
-  await db.delete(notifications);
-  await db.delete(routeHistory);
-  await db.delete(users);
-  await db.delete(buses);
-  await db.delete(traffic);
-  await db.delete(stops);
-  await db.delete(routes);
+  const tablesToClear = [notifications, routeHistory, users, buses, traffic, stops, routes];
+  for (const table of tablesToClear) {
+    try {
+      await db.delete(table);
+    } catch {
+      // Table may not exist yet on first deploy — safe to skip
+    }
+  }
 
   // --------------------------
   // Routes

@@ -1,10 +1,11 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import NotFound from "@/pages/not-found";
+import AuthPage from "@/pages/AuthPage";
 import MapPage from "@/pages/MapPage";
 import NotificationPanel from "@/components/NotificationPanel";
 import Header from "@/components/Header";
@@ -29,6 +30,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={MainApp} />
+      <Route path="/auth" component={AuthPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -38,6 +40,7 @@ function MainApp() {
   const [notificationsPanelOpen, setNotificationsPanelOpen] = useState(false);
   const [authDialogOpen, setAuthDialogOpen] = useState(false);
   const { user } = useAuth();
+  const [, navigate] = useLocation();
 
   // WebSocket pushes bus_update and notification data into the query cache
   useWebSocket();
@@ -102,7 +105,7 @@ function MainApp() {
     <>
       <Header
         onOpenNotifications={() => setNotificationsPanelOpen(true)}
-        onOpenAuth={() => setAuthDialogOpen(true)}
+        onOpenAuth={() => navigate("/auth")}
         unreadCount={unreadCount}
       />
 
@@ -110,7 +113,7 @@ function MainApp() {
 
       <MobileBottomNav
         onOpenNotifications={() => setNotificationsPanelOpen(true)}
-        onOpenAuth={() => setAuthDialogOpen(true)}
+        onOpenAuth={() => navigate("/auth")}
         unreadCount={unreadCount}
       />
 
@@ -151,7 +154,7 @@ function MainApp() {
                 user={user}
                 onOpenAuth={() => {
                   setNotificationsPanelOpen(false);
-                  setAuthDialogOpen(true);
+                  navigate("/auth");
                 }}
               />
             </div>

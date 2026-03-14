@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/use-auth";
+import { useLocation } from "wouter";
 
 interface HeaderProps {
   onOpenNotifications: () => void;
@@ -23,6 +24,7 @@ export default function Header({
   unreadCount,
 }: HeaderProps) {
   const { user, logoutMutation } = useAuth();
+  const [, navigate] = useLocation();
 
   const userTypeLabel =
     user?.userType === "student"
@@ -106,7 +108,7 @@ export default function Header({
         <Button
           variant="default"
           size="sm"
-          onClick={onOpenAuth}
+          onClick={() => navigate("/auth")}
           className="gap-1.5 bg-[#B91C1C] hover:bg-[#991B1B] text-white rounded-full px-4"
         >
           <LogIn className="h-4 w-4" />

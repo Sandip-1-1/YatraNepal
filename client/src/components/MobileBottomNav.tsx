@@ -1,6 +1,7 @@
 import { Map, Bell, User, LogIn } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 
 interface MobileBottomNavProps {
   onOpenNotifications: () => void;
@@ -14,6 +15,7 @@ export default function MobileBottomNav({
   unreadCount,
 }: MobileBottomNavProps) {
   const { user } = useAuth();
+  const [, navigate] = useLocation();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-[1002] h-14 bg-background/95 backdrop-blur-md border-t flex items-center justify-around sm:hidden">
@@ -50,7 +52,7 @@ export default function MobileBottomNav({
       ) : (
         <button
           className="flex flex-col items-center gap-0.5 text-muted-foreground"
-          onClick={onOpenAuth}
+          onClick={() => navigate("/auth")}
         >
           <LogIn className="h-5 w-5" />
           <span className="text-[10px] font-medium">Login</span>
